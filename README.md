@@ -38,6 +38,12 @@ Python 프로젝트입니다.
    python -m mnsoft.main
    ```
 
+   Google 트렌드 실시간 인기 검색어 목록을 보여주는 로컬 화면:
+
+   ```bash
+   python -m mnsoft.gui
+   ```
+
 5. 테스트 실행
 
    ```bash
