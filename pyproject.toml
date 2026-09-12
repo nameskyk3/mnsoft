@@ -12,6 +12,7 @@ license = { text = "MIT" }
 dependencies = [
     "requests>=2.31",
     "anthropic",
+    "Pillow>=10",
 ]
 
 [project.optional-dependencies]

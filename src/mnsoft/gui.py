@@ -1,12 +1,17 @@
+import io
 import threading
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import messagebox, ttk
 
 import anthropic
+from PIL import Image, ImageTk
 
+from mnsoft.images import download_image_bytes, search_images
 from mnsoft.news import CATEGORIES, get_headlines, search_headlines
 from mnsoft.summarize import generate_report
+
+_IMAGE_WIDTH = 400
 
 
 class NewsApp:
@@ -14,6 +19,7 @@ class NewsApp:
         self.root = root
         self.root.title("오늘의 이슈 - 분야별 뉴스")
         self.root.geometry("420x600")
+        self._photo_refs: list[ImageTk.PhotoImage] = []
 
         search_frame = tk.Frame(root)
         search_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
@@ -107,50 +113,98 @@ class NewsApp:
         threading.Thread(target=self._generate_report, args=(tab_key, headline), daemon=True).start()
 
     def _generate_report(self, tab_key: str, headline: str) -> None:
+        title = paragraphs = images = None
+        error = None
         try:
             document = generate_report(headline)
-            error = None
+            title, _, body = document.strip().partition("\n\n")
+            title = title.strip() or headline
+            paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
+            images = self._fetch_images(headline)
         except anthropic.AuthenticationError:
-            document = None
             error = (
                 "Claude API 키가 없거나 올바르지 않습니다.\n"
                 "환경변수 ANTHROPIC_API_KEY를 설정한 뒤 다시 실행해주세요."
             )
         except anthropic.RateLimitError:
-            document = None
             error = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
         except anthropic.APIStatusError as exc:
-            document = None
             error = f"API 오류: {exc.message}"
         except anthropic.APIConnectionError:
-            document = None
             error = "네트워크 연결을 확인해주세요."
         except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
-            document = None
             error = str(exc)
-        self.root.after(0, self._on_report_ready, tab_key, document, error)
+        self.root.after(0, self._on_report_ready, tab_key, title, paragraphs, images, error)
 
-    def _on_report_ready(self, tab_key: str, document: str | None, error: str | None) -> None:
+    def _fetch_images(self, query: str) -> list[dict]:
+        try:
+            photos = search_images(query)
+        except Exception:  # noqa: BLE001 - photos are a nice-to-have, never block the report
+            return []
+        images = []
+        for photo in photos:
+            try:
+                photo["bytes"] = download_image_bytes(photo["url"])
+                images.append(photo)
+            except Exception:  # noqa: BLE001, S112 - skip any photo that fails to download
+                continue
+        return images
+
+    def _on_report_ready(
+        self,
+        tab_key: str,
+        title: str | None,
+        paragraphs: list[str] | None,
+        images: list[dict] | None,
+        error: str | None,
+    ) -> None:
         self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
         if error:
             messagebox.showerror("문서 생성 실패", error)
             return
-        self._show_report_window(document)
+        self._show_report_window(title, paragraphs, images)
 
-    def _show_report_window(self, document: str) -> None:
-        title, _, body = document.strip().partition("\n\n")
-        title = title.strip() or "생성된 글"
-        body = body.strip()
-
+    def _show_report_window(self, title: str, paragraphs: list[str], images: list[dict]) -> None:
         window = tk.Toplevel(self.root)
         window.title(title[:40])
-        window.geometry("480x600")
+        window.geometry("480x640")
+
         text_widget = tk.Text(window, wrap=tk.WORD, font=("Malgun Gothic", 11))
         text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         text_widget.tag_configure("title", font=("Malgun Gothic", 13, "bold"))
+        text_widget.tag_configure("credit", font=("Malgun Gothic", 8), foreground="#888888")
+
         text_widget.insert(tk.END, f"{title}\n\n", "title")
-        text_widget.insert(tk.END, body)
+
+        slots = len(images)
+        group_size = max(1, len(paragraphs) // (slots + 1)) if slots else len(paragraphs)
+
+        para_index = 0
+        for i in range(slots):
+            for _ in range(group_size):
+                if para_index >= len(paragraphs):
+                    break
+                text_widget.insert(tk.END, paragraphs[para_index] + "\n\n")
+                para_index += 1
+            self._insert_image(text_widget, images[i])
+
+        while para_index < len(paragraphs):
+            text_widget.insert(tk.END, paragraphs[para_index] + "\n\n")
+            para_index += 1
+
         text_widget.config(state=tk.DISABLED)
+
+    def _insert_image(self, text_widget: tk.Text, photo: dict) -> None:
+        try:
+            image = Image.open(io.BytesIO(photo["bytes"]))
+            ratio = _IMAGE_WIDTH / image.width
+            image = image.resize((_IMAGE_WIDTH, int(image.height * ratio)))
+            tk_image = ImageTk.PhotoImage(image)
+        except Exception:  # noqa: BLE001 - skip a photo that fails to render
+            return
+        self._photo_refs.append(tk_image)
+        text_widget.image_create(tk.END, image=tk_image)
+        text_widget.insert(tk.END, f"\n사진: Pexels / {photo['photographer']}\n\n", "credit")
 
 
 def main() -> None:

@@ -77,6 +77,19 @@ Python 프로젝트입니다.
   setx ANTHROPIC_API_KEY "여기에-발급받은-키"
   ```
 
+### 사진 자동 삽입 (Pexels, 무료)
+
+생성된 글에는 헤드라인과 관련된 사진이 문단 사이사이에 자동으로 들어갑니다. 저작권 걱정 없이
+상업적으로도 무료로 쓸 수 있는 [Pexels](https://www.pexels.com) 사진을 사용합니다.
+
+1. https://www.pexels.com/api 에서 무료 계정으로 API 키 발급 (신용카드 등록 불필요)
+2. 환경변수로 등록:
+   ```powershell
+   setx PEXELS_API_KEY "여기에-발급받은-키"
+   ```
+
+`PEXELS_API_KEY`를 등록하지 않아도 나머지 기능은 그대로 동작하고, 사진만 빠집니다.
+
 ## 빠른 실행 (Windows)
 
 처음 클론 이후에는 `run.bat`을 더블클릭(또는 터미널에서 `run.bat` 입력)하면
