@@ -38,7 +38,7 @@ Python 프로젝트입니다.
    python -m mnsoft.main
    ```
 
-   Google 트렌드 실시간 인기 검색어 목록을 보여주는 로컬 화면:
+   뉴스 / 쇼핑 / 엔터 / 스포츠 분야별 오늘의 이슈(구글 뉴스 RSS 기반)를 탭으로 보여주는 로컬 화면:
 
    ```bash
    python -m mnsoft.gui
