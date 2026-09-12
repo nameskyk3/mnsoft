@@ -58,6 +58,25 @@ Python 프로젝트입니다.
    ruff check .
    ```
 
+## "적용" 버튼 (Claude API 연동, 유료)
+
+각 탭의 목록에서 이슈를 선택하고 "적용" 버튼을 누르면 Claude가 웹 검색으로 사실을 확인한 뒤
+언제/어디서/무엇을/어떻게/왜로 정리한 문서를 새 창으로 보여줍니다.
+
+- 이 기능은 다른 기능과 달리 **무료가 아닙니다.** [console.anthropic.com](https://console.anthropic.com)에서
+  API 키를 발급받아야 하고, 요청마다 소액이 과금됩니다 (문서 1개당 대략 몇 십 원~몇 백 원 수준).
+- 발급받은 키는 환경변수 `ANTHROPIC_API_KEY`로 등록해야 합니다.
+
+  Windows (PowerShell, 현재 세션에만 적용):
+  ```powershell
+  $env:ANTHROPIC_API_KEY = "여기에-발급받은-키"
+  ```
+
+  Windows에서 항상 적용되게 하려면 (새 터미널부터 적용):
+  ```powershell
+  setx ANTHROPIC_API_KEY "여기에-발급받은-키"
+  ```
+
 ## 빠른 실행 (Windows)
 
 처음 클론 이후에는 `run.bat`을 더블클릭(또는 터미널에서 `run.bat` 입력)하면

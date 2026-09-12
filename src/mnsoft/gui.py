@@ -3,14 +3,17 @@ import tkinter as tk
 from collections.abc import Callable
 from tkinter import messagebox, ttk
 
+import anthropic
+
 from mnsoft.news import CATEGORIES, get_headlines, search_headlines
+from mnsoft.summarize import generate_report
 
 
 class NewsApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("오늘의 이슈 - 분야별 뉴스")
-        self.root.geometry("420x560")
+        self.root.geometry("420x600")
 
         search_frame = tk.Frame(root)
         search_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
@@ -30,6 +33,7 @@ class NewsApp:
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
         self.listboxes: dict[str, tk.Listbox] = {}
+        self.apply_buttons: dict[str, tk.Button] = {}
         for category in CATEGORIES:
             self._add_tab(category)
 
@@ -39,8 +43,11 @@ class NewsApp:
         frame = tk.Frame(self.notebook)
         listbox = tk.Listbox(frame, font=("Malgun Gothic", 11))
         listbox.pack(fill=tk.BOTH, expand=True)
+        apply_button = tk.Button(frame, text="적용", command=lambda: self.apply_selected(title))
+        apply_button.pack(fill=tk.X, pady=(4, 0))
         self.notebook.add(frame, text=title)
         self.listboxes[title] = listbox
+        self.apply_buttons[title] = apply_button
 
     def _tab_id_for(self, title: str) -> str:
         for tab_id in self.notebook.tabs():
@@ -85,6 +92,61 @@ class NewsApp:
             return
         for i, headline in enumerate(headlines, start=1):
             listbox.insert(tk.END, f"{i}. {headline}")
+
+    def apply_selected(self, tab_key: str) -> None:
+        listbox = self.listboxes[tab_key]
+        selection = listbox.curselection()
+        if not selection:
+            messagebox.showinfo("알림", "먼저 목록에서 이슈를 선택해주세요.")
+            return
+        raw_text = listbox.get(selection[0])
+        headline = raw_text.split(". ", 1)[1] if ". " in raw_text else raw_text
+
+        button = self.apply_buttons[tab_key]
+        button.config(state=tk.DISABLED, text="생성 중...")
+        threading.Thread(target=self._generate_report, args=(tab_key, headline), daemon=True).start()
+
+    def _generate_report(self, tab_key: str, headline: str) -> None:
+        try:
+            document = generate_report(headline)
+            error = None
+        except anthropic.AuthenticationError:
+            document = None
+            error = (
+                "Claude API 키가 없거나 올바르지 않습니다.\n"
+                "환경변수 ANTHROPIC_API_KEY를 설정한 뒤 다시 실행해주세요."
+            )
+        except anthropic.RateLimitError:
+            document = None
+            error = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+        except anthropic.APIStatusError as exc:
+            document = None
+            error = f"API 오류: {exc.message}"
+        except anthropic.APIConnectionError:
+            document = None
+            error = "네트워크 연결을 확인해주세요."
+        except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
+            document = None
+            error = str(exc)
+        self.root.after(0, self._on_report_ready, tab_key, headline, document, error)
+
+    def _on_report_ready(
+        self, tab_key: str, headline: str, document: str | None, error: str | None
+    ) -> None:
+        self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
+        if error:
+            messagebox.showerror("문서 생성 실패", error)
+            return
+        self._show_report_window(headline, document)
+
+    def _show_report_window(self, headline: str, document: str) -> None:
+        window = tk.Toplevel(self.root)
+        window.title(headline[:40])
+        window.geometry("480x600")
+        text_widget = tk.Text(window, wrap=tk.WORD, font=("Malgun Gothic", 11))
+        text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        text_widget.insert("1.0", f"{headline}\n\n{document}")
+        text_widget.config(state=tk.DISABLED)
 
 
 def main() -> None:
