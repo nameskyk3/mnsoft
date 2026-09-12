@@ -21,9 +21,25 @@ _SYSTEM_PROMPT = (
 
 _cached_model: str | None = None
 
+# Models that technically support generateContent but expect a different
+# request shape (audio/image/video output, embeddings, ...) and would fail
+# on our plain text request - skip them rather than waste an attempt.
+_EXCLUDED_KEYWORDS = (
+    "tts",
+    "image",
+    "vision",
+    "audio",
+    "video",
+    "veo",
+    "imagen",
+    "embedding",
+    "aqa",
+    "live",
+)
+
 
 def _list_candidate_models(api_key: str) -> list[str]:
-    """List models this key can call generateContent on, flash models first."""
+    """List text-generation models this key can call, flash models first."""
     response = requests.get(f"{_BASE_URL}/models", params={"key": api_key}, timeout=15)
     response.raise_for_status()
     models = response.json().get("models", [])
@@ -33,6 +49,7 @@ def _list_candidate_models(api_key: str) -> list[str]:
         for model in models
         if "generateContent" in model.get("supportedGenerationMethods", [])
     ]
+    names = [name for name in names if not any(keyword in name for keyword in _EXCLUDED_KEYWORDS)]
     if not names:
         raise RuntimeError("사용 가능한 Gemini 모델을 찾지 못했습니다.")
 
@@ -82,7 +99,7 @@ def generate_report(headline: str) -> str:
             return False
         tried.add(model)
         response = _call_gemini(model, api_key, payload)
-        if response.status_code == 404:
+        if response.status_code in (400, 404):
             return False
         response.raise_for_status()
         _cached_model = model

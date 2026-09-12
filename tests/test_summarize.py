@@ -15,6 +15,10 @@ SAMPLE_MODELS_RESPONSE = {
     "models": [
         {"name": "models/gemini-1.0-pro", "supportedGenerationMethods": ["generateContent"]},
         {"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
+        {
+            "name": "models/gemini-2.5-flash-preview-tts",
+            "supportedGenerationMethods": ["generateContent"],
+        },
         {"name": "models/embedding-001", "supportedGenerationMethods": ["embedContent"]},
     ]
 }
@@ -72,7 +76,22 @@ def test_generate_report_falls_back_past_404(mock_post, mock_get, monkeypatch):
 
 
 @patch("mnsoft.summarize.requests.get")
-def test_list_candidate_models_puts_flash_first(mock_get):
+@patch("mnsoft.summarize.requests.post")
+def test_generate_report_falls_back_past_400(mock_post, mock_get, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    mock_get.return_value = _make_response(200, SAMPLE_MODELS_RESPONSE)
+    # a model that rejects our plain-text request shape (e.g. mismatched modality)
+    mock_post.side_effect = [_make_response(400), _make_response(200, SAMPLE_RESPONSE)]
+
+    result = generate_report("테스트 헤드라인")
+
+    assert result == "문서 내용"
+    assert mock_post.call_count == 2
+
+
+@patch("mnsoft.summarize.requests.get")
+def test_list_candidate_models_excludes_non_text_and_puts_flash_first(mock_get):
     mock_get.return_value = _make_response(200, SAMPLE_MODELS_RESPONSE)
 
     result = _list_candidate_models("fake-key")
