@@ -2,8 +2,7 @@ import os
 
 import requests
 
-_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
+_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 _SYSTEM_PROMPT = (
     "너는 블로그 글쓰기 도우미야. 사용자가 준 이슈(헤드라인)에 대해 블로그에 바로 올릴 수 있는 "
@@ -19,6 +18,31 @@ _SYSTEM_PROMPT = (
     "완곡하게 표현해."
 )
 
+_cached_model: str | None = None
+
+
+def _discover_model(api_key: str) -> str:
+    """Pick a usable Gemini model instead of hardcoding a name that may be retired."""
+    global _cached_model
+    if _cached_model:
+        return _cached_model
+
+    response = requests.get(f"{_BASE_URL}/models", params={"key": api_key}, timeout=15)
+    response.raise_for_status()
+    models = response.json().get("models", [])
+
+    candidates = [
+        model["name"].removeprefix("models/")
+        for model in models
+        if "generateContent" in model.get("supportedGenerationMethods", [])
+    ]
+    if not candidates:
+        raise RuntimeError("사용 가능한 Gemini 모델을 찾지 못했습니다.")
+
+    flash_models = [name for name in candidates if "flash" in name]
+    _cached_model = (flash_models or candidates)[0]
+    return _cached_model
+
 
 def generate_report(headline: str) -> str:
     """Ask Gemini (free tier, no web search) to turn a headline into a blog-ready article.
@@ -30,8 +54,10 @@ def generate_report(headline: str) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
+    model = os.environ.get("GEMINI_MODEL") or _discover_model(api_key)
+
     response = requests.post(
-        _API_URL,
+        f"{_BASE_URL}/models/{model}:generateContent",
         params={"key": api_key},
         json={
             "system_instruction": {"parts": [{"text": _SYSTEM_PROMPT}]},
