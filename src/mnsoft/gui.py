@@ -1,4 +1,5 @@
 import io
+import sys
 import threading
 import tkinter as tk
 from collections.abc import Callable
@@ -219,7 +220,39 @@ class NewsApp:
             return
         self._photo_refs.append(tk_image)
         text_widget.image_create(tk.END, image=tk_image)
+        text_widget.insert(tk.END, "\n")
+
+        copy_button = tk.Button(
+            text_widget,
+            text="사진 복사 (클립보드)",
+            command=lambda: self._copy_image_to_clipboard(photo["bytes"]),
+        )
+        text_widget.window_create(tk.END, window=copy_button)
+
         text_widget.insert(tk.END, f"\n사진: Pexels / {photo['photographer']}\n\n", "credit")
+
+    def _copy_image_to_clipboard(self, image_bytes: bytes) -> None:
+        if sys.platform != "win32":
+            messagebox.showinfo("알림", "사진 클립보드 복사는 Windows에서만 지원됩니다.")
+            return
+        try:
+            import win32clipboard
+
+            output = io.BytesIO()
+            Image.open(io.BytesIO(image_bytes)).convert("RGB").save(output, "BMP")
+            dib_data = output.getvalue()[14:]  # strip the BMP file header for CF_DIB
+            output.close()
+
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, dib_data)
+            win32clipboard.CloseClipboard()
+        except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
+            messagebox.showerror("복사 실패", str(exc))
+            return
+        messagebox.showinfo(
+            "복사 완료", "사진이 클립보드에 복사되었습니다.\n블로그 글쓰기 화면에서 Ctrl+V로 붙여넣으세요."
+        )
 
 
 def main() -> None:

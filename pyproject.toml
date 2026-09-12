@@ -13,6 +13,7 @@ dependencies = [
     "requests>=2.31",
     "anthropic",
     "Pillow>=10",
+    "pywin32; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]
