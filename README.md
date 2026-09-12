@@ -56,6 +56,15 @@ Python 프로젝트입니다.
    ruff check .
    ```
 
+## 빠른 실행 (Windows)
+
+처음 클론 이후에는 `run.bat`을 더블클릭(또는 터미널에서 `run.bat` 입력)하면
+가상환경 생성/활성화, 최신 코드 받기, 의존성 설치, 트렌드 화면 실행까지 한 번에 처리됩니다.
+
+```powershell
+run.bat
+```
+
 ## 프로젝트 구조
 
 ```
@@ -63,6 +72,7 @@ mnsoft/
 ├── src/mnsoft/      # 소스 코드
 ├── tests/           # 테스트 코드
 ├── pyproject.toml   # 프로젝트/의존성 설정
+├── run.bat          # Windows용 원클릭 실행 스크립트
 └── .github/workflows/ci.yml  # GitHub Actions CI (자동 테스트)
 ```
 
