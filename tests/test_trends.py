@@ -1,15 +1,27 @@
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
-
 from mnsoft.trends import get_trending_keywords
 
+SAMPLE_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Daily Search Trends</title>
+    <item>
+      <title>\xed\x82\xa4\xec\x9b\x8c\xeb\x93\x9c1</title>
+    </item>
+    <item>
+      <title>\xed\x82\xa4\xec\x9b\x8c\xeb\x93\x9c2</title>
+    </item>
+  </channel>
+</rss>
+"""
 
-@patch("mnsoft.trends.TrendReq")
-def test_get_trending_keywords(mock_trend_req):
-    mock_instance = MagicMock()
-    mock_instance.trending_searches.return_value = pd.DataFrame(["키워드1", "키워드2"])
-    mock_trend_req.return_value = mock_instance
+
+@patch("mnsoft.trends.requests.get")
+def test_get_trending_keywords(mock_get):
+    mock_response = MagicMock()
+    mock_response.content = SAMPLE_RSS
+    mock_get.return_value = mock_response
 
     result = get_trending_keywords()
 
