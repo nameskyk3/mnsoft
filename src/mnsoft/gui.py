@@ -47,7 +47,7 @@ class NewsApp:
 
     def _add_tab(self, title: str) -> None:
         frame = tk.Frame(self.notebook)
-        listbox = tk.Listbox(frame, font=("Malgun Gothic", 11))
+        listbox = tk.Listbox(frame, font=("Malgun Gothic", 11), selectmode=tk.EXTENDED)
         listbox.pack(fill=tk.BOTH, expand=True)
         apply_button = tk.Button(frame, text="적용", command=lambda: self.apply_selected(title))
         apply_button.pack(fill=tk.X, pady=(4, 0))
@@ -103,16 +103,32 @@ class NewsApp:
         listbox = self.listboxes[tab_key]
         selection = listbox.curselection()
         if not selection:
-            messagebox.showinfo("알림", "먼저 목록에서 이슈를 선택해주세요.")
+            messagebox.showinfo("알림", "먼저 목록에서 이슈를 선택해주세요 (여러 개 선택 가능).")
             return
-        raw_text = listbox.get(selection[0])
-        headline = raw_text.split(". ", 1)[1] if ". " in raw_text else raw_text
+        headlines = []
+        for index in selection:
+            raw_text = listbox.get(index)
+            headline = raw_text.split(". ", 1)[1] if ". " in raw_text else raw_text
+            headlines.append(headline)
 
         button = self.apply_buttons[tab_key]
-        button.config(state=tk.DISABLED, text="생성 중...")
-        threading.Thread(target=self._generate_report, args=(tab_key, headline), daemon=True).start()
+        button.config(state=tk.DISABLED, text=f"생성 중... (0/{len(headlines)})")
+        threading.Thread(target=self._generate_reports, args=(tab_key, headlines), daemon=True).start()
 
-    def _generate_report(self, tab_key: str, headline: str) -> None:
+    def _generate_reports(self, tab_key: str, headlines: list[str]) -> None:
+        total = len(headlines)
+        for i, headline in enumerate(headlines, start=1):
+            self.root.after(0, self._update_progress, tab_key, i - 1, total)
+            self._generate_one_report(tab_key, headline)
+        self.root.after(0, self._finish_apply, tab_key)
+
+    def _update_progress(self, tab_key: str, done: int, total: int) -> None:
+        self.apply_buttons[tab_key].config(text=f"생성 중... ({done}/{total})")
+
+    def _finish_apply(self, tab_key: str) -> None:
+        self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
+
+    def _generate_one_report(self, tab_key: str, headline: str) -> None:
         title = paragraphs = images = None
         error = None
         try:
@@ -158,7 +174,6 @@ class NewsApp:
         images: list[dict] | None,
         error: str | None,
     ) -> None:
-        self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
         if error:
             messagebox.showerror("문서 생성 실패", error)
             return
