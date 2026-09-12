@@ -128,24 +128,28 @@ class NewsApp:
         except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
             document = None
             error = str(exc)
-        self.root.after(0, self._on_report_ready, tab_key, headline, document, error)
+        self.root.after(0, self._on_report_ready, tab_key, document, error)
 
-    def _on_report_ready(
-        self, tab_key: str, headline: str, document: str | None, error: str | None
-    ) -> None:
+    def _on_report_ready(self, tab_key: str, document: str | None, error: str | None) -> None:
         self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
         if error:
             messagebox.showerror("문서 생성 실패", error)
             return
-        self._show_report_window(headline, document)
+        self._show_report_window(document)
 
-    def _show_report_window(self, headline: str, document: str) -> None:
+    def _show_report_window(self, document: str) -> None:
+        title, _, body = document.strip().partition("\n\n")
+        title = title.strip() or "생성된 글"
+        body = body.strip()
+
         window = tk.Toplevel(self.root)
-        window.title(headline[:40])
+        window.title(title[:40])
         window.geometry("480x600")
         text_widget = tk.Text(window, wrap=tk.WORD, font=("Malgun Gothic", 11))
         text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        text_widget.insert("1.0", f"{headline}\n\n{document}")
+        text_widget.tag_configure("title", font=("Malgun Gothic", 13, "bold"))
+        text_widget.insert(tk.END, f"{title}\n\n", "title")
+        text_widget.insert(tk.END, body)
         text_widget.config(state=tk.DISABLED)
 
 
