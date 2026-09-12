@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mnsoft.images import download_image_bytes, search_images
+from mnsoft.images import download_image_bytes, generate_ai_image, search_images
 
 SAMPLE_RESPONSE = {
     "photos": [
@@ -29,6 +29,7 @@ def test_search_images(mock_get, monkeypatch):
             "url": "https://images.pexels.com/photos/1/medium.jpg",
             "photographer": "홍길동",
             "page_url": "https://www.pexels.com/photo/1",
+            "source": "pexels",
         }
     ]
     _, kwargs = mock_get.call_args
@@ -52,3 +53,17 @@ def test_download_image_bytes(mock_get):
     result = download_image_bytes("https://images.pexels.com/photos/1/medium.jpg")
 
     assert result == b"fake-image-bytes"
+
+
+@patch("mnsoft.images.requests.get")
+def test_generate_ai_image(mock_get):
+    mock_response = MagicMock()
+    mock_response.content = b"fake-ai-image-bytes"
+    mock_get.return_value = mock_response
+
+    result = generate_ai_image("고양이 그림")
+
+    assert result == b"fake-ai-image-bytes"
+    args, kwargs = mock_get.call_args
+    assert "%EA%B3%A0%EC%96%91%EC%9D%B4" in args[0]  # URL-encoded 고양이
+    assert kwargs["params"]["width"] == 768

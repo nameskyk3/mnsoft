@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 import anthropic
 from PIL import Image, ImageTk
 
-from mnsoft.images import download_image_bytes, search_images
+from mnsoft.images import download_image_bytes, generate_ai_image, search_images
 from mnsoft.news import CATEGORIES, get_headlines, search_headlines
 from mnsoft.summarize import generate_report
 
@@ -137,7 +137,7 @@ class NewsApp:
             title, _, body = document.strip().partition("\n\n")
             title = title.strip() or headline
             paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
-            images = self._fetch_images(headline)
+            images = self._fetch_images(headline, title)
         except anthropic.AuthenticationError:
             error = (
                 "Claude API 키가 없거나 올바르지 않습니다.\n"
@@ -153,11 +153,12 @@ class NewsApp:
             error = str(exc)
         self.root.after(0, self._on_report_ready, tab_key, title, paragraphs, images, error)
 
-    def _fetch_images(self, query: str) -> list[dict]:
+    def _fetch_images(self, query: str, title: str) -> list[dict]:
         try:
             photos = search_images(query)
         except Exception:  # noqa: BLE001 - photos are a nice-to-have, never block the report
-            return []
+            photos = []
+
         images = []
         for photo in photos:
             try:
@@ -165,6 +166,15 @@ class NewsApp:
                 images.append(photo)
             except Exception:  # noqa: BLE001, S112 - skip any photo that fails to download
                 continue
+
+        if not images:
+            try:
+                images.append(
+                    {"bytes": generate_ai_image(title), "source": "ai", "photographer": "AI 생성"}
+                )
+            except Exception:  # noqa: BLE001, S110 - AI image is best-effort, never block the report
+                pass
+
         return images
 
     def _on_report_ready(
@@ -229,7 +239,11 @@ class NewsApp:
         )
         text_widget.window_create(tk.END, window=copy_button)
 
-        text_widget.insert(tk.END, f"\n사진: Pexels / {photo['photographer']}\n\n", "credit")
+        if photo.get("source") == "ai":
+            credit_text = "사진: AI 생성 이미지 (Pollinations.ai)"
+        else:
+            credit_text = f"사진: Pexels / {photo['photographer']}"
+        text_widget.insert(tk.END, f"\n{credit_text}\n\n", "credit")
 
     def _copy_image_to_clipboard(self, image_bytes: bytes) -> None:
         if sys.platform != "win32":
