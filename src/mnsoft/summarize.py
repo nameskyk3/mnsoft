@@ -1,9 +1,12 @@
 import os
+import time
 
 import requests
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _MAX_MODEL_ATTEMPTS = 5
+_MAX_RETRIES_PER_MODEL = 3
+_RETRY_DELAY_SECONDS = 2
 
 _SYSTEM_PROMPT = (
     "너는 블로그 글쓰기 도우미야. 사용자가 준 이슈(헤드라인)에 대해 블로그에 바로 올릴 수 있는 "
@@ -98,8 +101,13 @@ def generate_report(headline: str) -> str:
         if not model or model in tried:
             return False
         tried.add(model)
-        response = _call_gemini(model, api_key, payload)
-        if response.status_code in (400, 404):
+        for attempt in range(_MAX_RETRIES_PER_MODEL):
+            response = _call_gemini(model, api_key, payload)
+            if response.status_code < 500:
+                break
+            if attempt < _MAX_RETRIES_PER_MODEL - 1:
+                time.sleep(_RETRY_DELAY_SECONDS)
+        if response.status_code in (400, 404) or response.status_code >= 500:
             return False
         response.raise_for_status()
         _cached_model = model

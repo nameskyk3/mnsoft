@@ -97,3 +97,41 @@ def test_list_candidate_models_excludes_non_text_and_puts_flash_first(mock_get):
     result = _list_candidate_models("fake-key")
 
     assert result == ["gemini-2.0-flash", "gemini-1.0-pro"]
+
+
+@patch("mnsoft.summarize.time.sleep")
+@patch("mnsoft.summarize.requests.post")
+def test_generate_report_retries_same_model_on_503(mock_post, mock_sleep, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-test-model")
+    # transient overload, then succeeds on the same model
+    mock_post.side_effect = [_make_response(503), _make_response(200, SAMPLE_RESPONSE)]
+
+    result = generate_report("테스트 헤드라인")
+
+    assert result == "문서 내용"
+    assert mock_post.call_count == 2
+    mock_sleep.assert_called_once()
+
+
+@patch("mnsoft.summarize.time.sleep")
+@patch("mnsoft.summarize.requests.get")
+@patch("mnsoft.summarize.requests.post")
+def test_generate_report_falls_back_to_next_model_after_repeated_503(
+    mock_post, mock_get, mock_sleep, monkeypatch
+):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    mock_get.return_value = _make_response(200, SAMPLE_MODELS_RESPONSE)
+    # first candidate stays overloaded for all retries, second candidate works
+    mock_post.side_effect = [
+        _make_response(503),
+        _make_response(503),
+        _make_response(503),
+        _make_response(200, SAMPLE_RESPONSE),
+    ]
+
+    result = generate_report("테스트 헤드라인")
+
+    assert result == "문서 내용"
+    assert mock_post.call_count == 4
