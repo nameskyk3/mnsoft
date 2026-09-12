@@ -5,7 +5,7 @@ import tkinter as tk
 from collections.abc import Callable
 from tkinter import messagebox, ttk
 
-import anthropic
+import requests
 from PIL import Image, ImageTk
 
 from mnsoft.images import download_image_bytes, generate_ai_image, search_images
@@ -138,17 +138,21 @@ class NewsApp:
             title = title.strip() or headline
             paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
             images = self._fetch_images(headline, title)
-        except anthropic.AuthenticationError:
-            error = (
-                "Claude API 키가 없거나 올바르지 않습니다.\n"
-                "환경변수 ANTHROPIC_API_KEY를 설정한 뒤 다시 실행해주세요."
-            )
-        except anthropic.RateLimitError:
-            error = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
-        except anthropic.APIStatusError as exc:
-            error = f"API 오류: {exc.message}"
-        except anthropic.APIConnectionError:
-            error = "네트워크 연결을 확인해주세요."
+        except RuntimeError as exc:
+            error = str(exc)
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 429:
+                error = "요청이 너무 많습니다 (무료 할당량 초과). 잠시 후 다시 시도해주세요."
+            elif status in (401, 403):
+                error = (
+                    "Gemini API 키가 없거나 올바르지 않습니다.\n"
+                    "환경변수 GEMINI_API_KEY를 설정한 뒤 다시 실행해주세요."
+                )
+            else:
+                error = f"API 오류: {exc}"
+        except requests.exceptions.RequestException as exc:
+            error = f"네트워크 연결을 확인해주세요.\n\n{exc}"
         except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
             error = str(exc)
         self.root.after(0, self._on_report_ready, tab_key, title, paragraphs, images, error)

@@ -58,26 +58,30 @@ Python 프로젝트입니다.
    ruff check .
    ```
 
-## "적용" 버튼 (Claude API 연동, 유료)
+## "적용" 버튼 (Gemini API 연동, 무료)
 
-각 탭의 목록에서 이슈를 선택하고 "적용" 버튼을 누르면 Claude가 웹 검색으로 사실을 확인한 뒤
-자연스러운 블로그 글을 새 창으로 보여줍니다.
+각 탭의 목록에서 이슈를 선택하고 "적용" 버튼을 누르면 Gemini가 자연스러운 블로그 글을
+새 창으로 보여줍니다.
 
 - Ctrl(또는 Shift) 클릭으로 **여러 개를 한 번에 선택**할 수 있습니다. 이 경우 "적용"을 누르면
   순서대로 하나씩 처리되면서 완성되는 대로 창이 하나씩 뜹니다. 버튼에 "생성 중... (2/5)"처럼
   진행 상황이 표시되니, 여러 개 선택해두고 자리를 비우셔도 됩니다.
-- 이 기능은 다른 기능과 달리 **무료가 아닙니다.** [console.anthropic.com](https://console.anthropic.com)에서
-  API 키를 발급받아야 하고, 요청마다 소액이 과금됩니다 (문서 1개당 대략 몇 십 원~몇 백 원 수준).
-- 발급받은 키는 환경변수 `ANTHROPIC_API_KEY`로 등록해야 합니다.
+- **무료입니다.** [Google AI Studio](https://aistudio.google.com/apikey)에서 구글 계정으로
+  로그인해 API 키를 발급받으면 되고, 신용카드 등록이 필요 없습니다. 다만 무료 요금제라
+  하루/분당 호출 횟수에 제한이 있습니다 (최신 한도는 https://ai.google.dev/pricing 참고). 한도를
+  넘으면 "요청이 너무 많습니다" 오류가 뜨는데, 잠시 후 다시 시도하면 됩니다.
+- 이 방식은 웹 검색을 하지 않고 Gemini가 알고 있는 지식만으로 글을 쓰므로, 아주 최근에 터진
+  속보성 뉴스는 정확도가 떨어질 수 있습니다.
+- 발급받은 키는 환경변수 `GEMINI_API_KEY`로 등록해야 합니다.
 
   Windows (PowerShell, 현재 세션에만 적용):
   ```powershell
-  $env:ANTHROPIC_API_KEY = "여기에-발급받은-키"
+  $env:GEMINI_API_KEY = "여기에-발급받은-키"
   ```
 
   Windows에서 항상 적용되게 하려면 (새 터미널부터 적용):
   ```powershell
-  setx ANTHROPIC_API_KEY "여기에-발급받은-키"
+  setx GEMINI_API_KEY "여기에-발급받은-키"
   ```
 
 ### 사진 자동 삽입 (Pexels, 무료)
