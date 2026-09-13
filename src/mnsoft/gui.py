@@ -1,9 +1,11 @@
 import io
+import os
+import re
 import sys
 import threading
 import tkinter as tk
 from collections.abc import Callable
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import requests
 from PIL import Image, ImageTk
@@ -13,13 +15,20 @@ from mnsoft.news import CATEGORIES, get_headlines, search_headlines
 from mnsoft.summarize import generate_report
 
 _IMAGE_WIDTH = 400
+_DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Pictures", "mnsoft_images")
+
+
+def _safe_filename(text: str, max_len: int = 40) -> str:
+    cleaned = re.sub(r'[\\/*?:"<>|]', "", text).strip()
+    cleaned = re.sub(r"\s+", "_", cleaned)
+    return cleaned[:max_len] or "image"
 
 
 class NewsApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("오늘의 이슈 - 분야별 뉴스")
-        self.root.geometry("420x600")
+        self.root.geometry("420x640")
         self._photo_refs: list[ImageTk.PhotoImage] = []
 
         search_frame = tk.Frame(root)
@@ -33,6 +42,17 @@ class NewsApp:
         search_button = tk.Button(search_frame, text="검색", command=self.search)
         search_button.pack(side=tk.LEFT, padx=(6, 0))
 
+        save_dir_frame = tk.Frame(root)
+        save_dir_frame.pack(fill=tk.X, padx=10, pady=(6, 0))
+
+        tk.Label(save_dir_frame, text="이미지 저장 위치:").pack(side=tk.LEFT)
+        self.save_dir_var = tk.StringVar(value=_DEFAULT_SAVE_DIR)
+        save_dir_entry = tk.Entry(save_dir_frame, textvariable=self.save_dir_var)
+        save_dir_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6))
+
+        browse_button = tk.Button(save_dir_frame, text="찾아보기", command=self._choose_save_dir)
+        browse_button.pack(side=tk.LEFT)
+
         self.refresh_button = tk.Button(root, text="새로고침", command=self.refresh_categories)
         self.refresh_button.pack(pady=8)
 
@@ -45,6 +65,11 @@ class NewsApp:
             self._add_tab(category)
 
         self.refresh_categories()
+
+    def _choose_save_dir(self) -> None:
+        directory = filedialog.askdirectory(initialdir=self.save_dir_var.get() or None)
+        if directory:
+            self.save_dir_var.set(directory)
 
     def _add_tab(self, title: str) -> None:
         frame = tk.Frame(self.notebook)
@@ -112,15 +137,19 @@ class NewsApp:
             headline = raw_text.split(". ", 1)[1] if ". " in raw_text else raw_text
             headlines.append(headline)
 
+        save_dir = self.save_dir_var.get().strip() or _DEFAULT_SAVE_DIR
+
         button = self.apply_buttons[tab_key]
         button.config(state=tk.DISABLED, text=f"생성 중... (0/{len(headlines)})")
-        threading.Thread(target=self._generate_reports, args=(tab_key, headlines), daemon=True).start()
+        threading.Thread(
+            target=self._generate_reports, args=(tab_key, headlines, save_dir), daemon=True
+        ).start()
 
-    def _generate_reports(self, tab_key: str, headlines: list[str]) -> None:
+    def _generate_reports(self, tab_key: str, headlines: list[str], save_dir: str) -> None:
         total = len(headlines)
         for i, headline in enumerate(headlines, start=1):
             self.root.after(0, self._update_progress, tab_key, i - 1, total)
-            self._generate_one_report(tab_key, headline)
+            self._generate_one_report(tab_key, headline, save_dir)
         self.root.after(0, self._finish_apply, tab_key)
 
     def _update_progress(self, tab_key: str, done: int, total: int) -> None:
@@ -129,7 +158,7 @@ class NewsApp:
     def _finish_apply(self, tab_key: str) -> None:
         self.apply_buttons[tab_key].config(state=tk.NORMAL, text="적용")
 
-    def _generate_one_report(self, tab_key: str, headline: str) -> None:
+    def _generate_one_report(self, tab_key: str, headline: str, save_dir: str) -> None:
         title = paragraphs = images = None
         error = None
         try:
@@ -137,7 +166,7 @@ class NewsApp:
             title, _, body = document.strip().partition("\n\n")
             title = title.strip() or headline
             paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
-            images = self._fetch_images(headline, title)
+            images = self._fetch_images(headline, title, save_dir)
         except RuntimeError as exc:
             error = str(exc)
         except requests.exceptions.HTTPError as exc:
@@ -157,7 +186,7 @@ class NewsApp:
             error = str(exc)
         self.root.after(0, self._on_report_ready, tab_key, title, paragraphs, images, error)
 
-    def _fetch_images(self, query: str, title: str) -> list[dict]:
+    def _fetch_images(self, query: str, title: str, save_dir: str) -> list[dict]:
         try:
             photos = search_images(query)
         except Exception:  # noqa: BLE001 - photos are a nice-to-have, never block the report
@@ -179,7 +208,25 @@ class NewsApp:
             except Exception:  # noqa: BLE001, S110 - AI image is best-effort, never block the report
                 pass
 
+        base_name = _safe_filename(title)
+        for i, photo in enumerate(images, start=1):
+            photo["saved_path"] = self._save_image_to_disk(save_dir, base_name, i, photo["bytes"])
+
         return images
+
+    def _save_image_to_disk(
+        self, save_dir: str, base_name: str, index: int, image_bytes: bytes
+    ) -> str | None:
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            image_format = (Image.open(io.BytesIO(image_bytes)).format or "JPEG").lower()
+            extension = "jpg" if image_format == "jpeg" else image_format
+            path = os.path.join(save_dir, f"{base_name}_{index}.{extension}")
+            with open(path, "wb") as f:
+                f.write(image_bytes)
+            return path
+        except Exception:  # noqa: BLE001 - saving to disk is best-effort
+            return None
 
     def _on_report_ready(
         self,
@@ -247,7 +294,13 @@ class NewsApp:
             credit_text = "사진: AI 생성 이미지 (Pollinations.ai)"
         else:
             credit_text = f"사진: Pexels / {photo['photographer']}"
-        text_widget.insert(tk.END, f"\n{credit_text}\n\n", "credit")
+        text_widget.insert(tk.END, f"\n{credit_text}\n", "credit")
+
+        saved_path = photo.get("saved_path")
+        if saved_path:
+            text_widget.insert(tk.END, f"[이미지 파일: {saved_path}]\n\n", "credit")
+        else:
+            text_widget.insert(tk.END, "\n")
 
     def _copy_image_to_clipboard(self, image_bytes: bytes) -> None:
         if sys.platform != "win32":
