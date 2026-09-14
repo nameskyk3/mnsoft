@@ -29,8 +29,8 @@ def test_get_search_trend(mock_post, monkeypatch):
 
     assert result == SAMPLE_RESPONSE["results"][0]["data"]
     _, kwargs = mock_post.call_args
-    assert kwargs["headers"]["X-Naver-Client-Id"] == "fake-id"
-    assert kwargs["headers"]["X-Naver-Client-Secret"] == "fake-secret"
+    assert kwargs["headers"]["X-NCP-APIGW-API-KEY-ID"] == "fake-id"
+    assert kwargs["headers"]["X-NCP-APIGW-API-KEY"] == "fake-secret"
     assert kwargs["json"]["keywordGroups"][0]["keywords"] == ["고양이"]
 
 

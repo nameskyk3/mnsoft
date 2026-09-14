@@ -3,11 +3,11 @@ import os
 
 import requests
 
-_TREND_URL = "https://openapi.naver.com/v1/datalab/search"
+_TREND_URL = "https://naveropenapi.apigw.ntruss.com/datalab/v1/search"
 
 
 def get_search_trend(keyword: str, days: int = 90, time_unit: str = "week") -> list[dict]:
-    """Fetch relative search-volume trend for a keyword via Naver DataLab (free).
+    """Fetch relative search-volume trend for a keyword via Naver DataLab (free, via NCP APIGW).
 
     Returns a list of {"period": "YYYY-MM-DD", "ratio": float} points, where
     ratio is relative to the highest point in the range (scaled to 100).
@@ -25,8 +25,8 @@ def get_search_trend(keyword: str, days: int = 90, time_unit: str = "week") -> l
     response = requests.post(
         _TREND_URL,
         headers={
-            "X-Naver-Client-Id": client_id,
-            "X-Naver-Client-Secret": client_secret,
+            "X-NCP-APIGW-API-KEY-ID": client_id,
+            "X-NCP-APIGW-API-KEY": client_secret,
             "Content-Type": "application/json",
         },
         json={
