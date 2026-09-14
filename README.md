@@ -117,6 +117,22 @@ Python 프로젝트입니다.
 `[이미지 파일: C:\...\제목_1.jpg]` 형식으로 저장 경로가 텍스트로 함께 표시됩니다 —
 그 파일을 직접 편집한 뒤 블로그에 다시 넣고 싶을 때 참고하시면 됩니다.
 
+## 키워드 트렌드 조회 (네이버 데이터랩, 무료)
+
+메인 화면 상단의 **"키워드 트렌드"** 칸에 궁금한 검색어를 입력하고 "조회"를 누르면, 최근 90일간
+그 키워드의 검색량 추이를 그래프로 보여주는 창이 뜹니다 (숫자는 그 기간 내 최고치를 100으로 둔
+상대적 비율). [네이버 데이터랩 검색어트렌드 API](https://developers.naver.com/products/service-api/datalab/datalab.md)를 사용합니다.
+
+**설정 방법 (무료)**
+1. https://developers.naver.com/apps/#/register 접속해서 네이버 계정으로 로그인
+2. 애플리케이션 등록 → 이름은 아무거나 입력
+3. 사용 API에서 **"데이터랩(검색어트렌드)"** 체크 후 등록
+4. 발급된 **Client ID / Client Secret**을 환경변수로 등록:
+   ```powershell
+   setx NAVER_CLIENT_ID "발급받은-Client-ID"
+   setx NAVER_CLIENT_SECRET "발급받은-Client-Secret"
+   ```
+
 ## 빠른 실행 (Windows)
 
 처음 클론 이후에는 `run.bat`을 더블클릭(또는 터미널에서 `run.bat` 입력)하면

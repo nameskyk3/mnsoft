@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 from mnsoft.images import download_image_bytes, generate_ai_image, search_images
 from mnsoft.news import CATEGORIES, get_headlines, search_headlines
 from mnsoft.summarize import generate_report
+from mnsoft.trends import get_search_trend
 
 _IMAGE_WIDTH = 400
 _DEFAULT_SAVE_DIR = os.path.join(os.path.expanduser("~"), "Pictures", "mnsoft_images")
@@ -28,7 +29,7 @@ class NewsApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("오늘의 이슈 - 분야별 뉴스")
-        self.root.geometry("420x640")
+        self.root.geometry("420x670")
         self._photo_refs: list[ImageTk.PhotoImage] = []
 
         search_frame = tk.Frame(root)
@@ -52,6 +53,18 @@ class NewsApp:
 
         browse_button = tk.Button(save_dir_frame, text="찾아보기", command=self._choose_save_dir)
         browse_button.pack(side=tk.LEFT)
+
+        trend_frame = tk.Frame(root)
+        trend_frame.pack(fill=tk.X, padx=10, pady=(6, 0))
+
+        tk.Label(trend_frame, text="키워드 트렌드:").pack(side=tk.LEFT)
+        self.trend_var = tk.StringVar()
+        trend_entry = tk.Entry(trend_frame, textvariable=self.trend_var)
+        trend_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6))
+        trend_entry.bind("<Return>", lambda _event: self.search_trend())
+
+        self.trend_button = tk.Button(trend_frame, text="조회", command=self.search_trend)
+        self.trend_button.pack(side=tk.LEFT)
 
         self.refresh_button = tk.Button(root, text="새로고침", command=self.refresh_categories)
         self.refresh_button.pack(pady=8)
@@ -324,6 +337,100 @@ class NewsApp:
         messagebox.showinfo(
             "복사 완료", "사진이 클립보드에 복사되었습니다.\n블로그 글쓰기 화면에서 Ctrl+V로 붙여넣으세요."
         )
+
+    def search_trend(self) -> None:
+        keyword = self.trend_var.get().strip()
+        if not keyword:
+            return
+        self.trend_button.config(state=tk.DISABLED, text="조회 중...")
+        threading.Thread(target=self._fetch_trend, args=(keyword,), daemon=True).start()
+
+    def _fetch_trend(self, keyword: str) -> None:
+        try:
+            points = get_search_trend(keyword)
+            error = None
+        except RuntimeError as exc:
+            points = []
+            error = str(exc)
+        except requests.exceptions.HTTPError as exc:
+            points = []
+            status = exc.response.status_code if exc.response is not None else None
+            if status in (401, 403):
+                error = (
+                    "네이버 API 키가 없거나 올바르지 않습니다.\n"
+                    "환경변수 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET을 설정한 뒤 다시 실행해주세요."
+                )
+            elif status == 429:
+                error = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+            else:
+                error = f"API 오류: {exc}"
+        except requests.exceptions.RequestException as exc:
+            points = []
+            error = f"네트워크 연결을 확인해주세요.\n\n{exc}"
+        except Exception as exc:  # noqa: BLE001 - surface any failure in the GUI dialog
+            points = []
+            error = str(exc)
+        self.root.after(0, self._on_trend_ready, keyword, points, error)
+
+    def _on_trend_ready(self, keyword: str, points: list[dict], error: str | None) -> None:
+        self.trend_button.config(state=tk.NORMAL, text="조회")
+        if error:
+            messagebox.showerror("조회 실패", error)
+            return
+        self._show_trend_window(keyword, points)
+
+    def _show_trend_window(self, keyword: str, points: list[dict]) -> None:
+        window = tk.Toplevel(self.root)
+        window.title(f"'{keyword}' 검색어 트렌드")
+        window.geometry("480x360")
+
+        width, height, margin = 440, 260, 30
+        canvas = tk.Canvas(window, width=width, height=height, bg="white")
+        canvas.pack(padx=10, pady=10)
+
+        if not points:
+            canvas.create_text(width // 2, height // 2, text="데이터가 없습니다.")
+            return
+
+        ratios = [p["ratio"] for p in points]
+        max_ratio = max(ratios) or 1
+        plot_w, plot_h = width - 2 * margin, height - 2 * margin
+        n = len(points)
+
+        def x_for(i: int) -> float:
+            return margin + (plot_w * i / max(1, n - 1))
+
+        def y_for(ratio: float) -> float:
+            return height - margin - (plot_h * ratio / max_ratio)
+
+        canvas.create_line(margin, height - margin, width - margin, height - margin)
+        canvas.create_line(margin, margin, margin, height - margin)
+
+        coords = []
+        for i, point in enumerate(points):
+            coords.extend([x_for(i), y_for(point["ratio"])])
+        if len(coords) >= 4:
+            canvas.create_line(*coords, fill="#4a90d9", width=2)
+
+        canvas.create_text(
+            margin, height - margin + 12, text=points[0]["period"], anchor="w", font=("Malgun Gothic", 8)
+        )
+        canvas.create_text(
+            width - margin,
+            height - margin + 12,
+            text=points[-1]["period"],
+            anchor="e",
+            font=("Malgun Gothic", 8),
+        )
+        canvas.create_text(margin - 4, margin, text="100", anchor="e", font=("Malgun Gothic", 8))
+        canvas.create_text(margin - 4, height - margin, text="0", anchor="e", font=("Malgun Gothic", 8))
+
+        tk.Label(
+            window,
+            text="※ 조회 기간 내 최고 검색량을 100으로 둔 상대적 비율입니다.",
+            font=("Malgun Gothic", 8),
+            fg="#888888",
+        ).pack(pady=(0, 10))
 
 
 def main() -> None:
